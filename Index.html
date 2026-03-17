@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Cronómetro Patinaje</title>
+
+  <!-- PWA iOS -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Patinaje" />
+  <link rel="apple-touch-icon" href="icon.png" />
+
+  <!-- PWA general -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#185FA5" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #ffffff;
+      --bg2: #f5f5f3;
+      --bg3: #eeece8;
+      --text: #1a1a18;
+      --text2: #6b6b67;
+      --border: rgba(0,0,0,0.12);
+      --border2: rgba(0,0,0,0.22);
+      --blue: #185FA5;
+      --blue-light: #E6F1FB;
+      --green: #3B6D11;
+      --red: #A32D2D;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1c1c1e;
+        --bg2: #2c2c2e;
+        --bg3: #3a3a3c;
+        --text: #f2f2f0;
+        --text2: #9a9a96;
+        --border: rgba(255,255,255,0.12);
+        --border2: rgba(255,255,255,0.22);
+        --blue-light: #0c2a4a;
+      }
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      -webkit-font-smoothing: antialiased;
+      overscroll-behavior: none;
+    }
+
+    .wrap {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 16px 16px env(safe-area-inset-bottom, 16px);
+      padding-top: max(16px, env(safe-area-inset-top, 16px));
+    }
+
+    .app-title {
+      font-size: 11px;
+      color: var(--text2);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    /* Config */
+    .config-panel {
+      background: var(--bg2);
+      border-radius: var(--radius-lg);
+      padding: 14px 16px;
+      margin-bottom: 16px;
+      transition: opacity 0.2s;
+    }
+    .config-panel.locked { opacity: 0.4; pointer-events: none; }
+    .config-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .config-row:last-of-type { margin-bottom: 0; }
+    .config-label { font-size: 13px; color: var(--text2); min-width: 120px; }
+    .config-row input {
+      width: 90px;
+      padding: 7px 10px;
+      font-size: 15px;
+      border: 0.5px solid var(--border2);
+      border-radius: var(--radius-md);
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+    }
+    .config-hint { font-size: 11px; color: var(--text2); margin-top: 8px; }
+
+    /* Cronómetro */
+    .cronometro { text-align: center; margin-bottom: 16px; }
+    .tiempo-total {
+      font-size: 56px;
+      font-weight: 500;
+      color: var(--text);
+      letter-spacing: -1px;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .tiempo-vuelta {
+      font-size: 17px;
+      color: var(--text2);
+      margin-top: 4px;
+      min-height: 24px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Cards */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0,1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .card {
+      background: var(--bg2);
+      border-radius: var(--radius-md);
+      padding: 10px 12px;
+    }
+    .card-label {
+      font-size: 10px;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+    .card-value {
+      font-size: 17px;
+      font-weight: 500;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .card-value.blue { color: var(--blue); }
+
+    /* Mensaje */
+    .message {
+      font-size: 14px;
+      color: var(--text2);
+      padding: 12px 14px;
+      background: var(--bg2);
+      border-radius: var(--radius-md);
+      margin-bottom: 14px;
+      line-height: 1.5;
+    }
+    .message strong { color: var(--text); }
+    .message.danger { color: var(--red); }
+
+    /* Botón vuelta */
+    .btn-vuelta {
+      width: 100%;
+      height: 100px;
+      border-radius: var(--radius-lg);
+      font-size: 24px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 0.5px solid var(--border2);
+      background: var(--bg);
+      color: var(--text);
+      margin-bottom: 14px;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      transition: transform 0.08s, background 0.1s;
+      font-family: var(--font);
+    }
+    .btn-vuelta:active { transform: scale(0.96); }
+    .btn-vuelta.start { background: var(--blue); color: var(--blue-light); border-color: var(--blue); }
+    .btn-vuelta.running { background: var(--green); color: #fff; border-color: var(--green); }
+    .btn-vuelta.done { background: var(--bg2); color: var(--text2); cursor: default; }
+
+    /* Tabla vueltas */
+    .laps-grid {
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      margin-bottom: 14px;
+    }
+    .lap-header {
+      display: grid;
+      grid-template-columns: 30px 1fr 1fr 1fr 32px;
+      font-size: 10px;
+      background: var(--bg2);
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .lap-header div, .lap-row div { padding: 8px 6px; }
+    .lap-row {
+      display: grid;
+      grid-template-columns: 30px 1fr 1fr 1fr 32px;
+      font-size: 13px;
+      border-top: 0.5px solid var(--border);
+      align-items: center;
+      font-variant-numeric: tabular-nums;
+    }
+    .lap-row .num { color: var(--text2); font-size: 12px; }
+    .lap-row .fast { color: var(--green); font-weight: 500; }
+    .lap-row .slow { color: var(--red); font-weight: 500; }
+    .edit-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 15px;
+      color: var(--text2);
+      padding: 6px 4px;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Modal edición */
+    .overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .modal {
+      background: var(--bg);
+      border-radius: var(--radius-lg);
+      border: 0.5px solid var(--border2);
+      padding: 20px;
+      width: 270px;
+    }
+    .modal h3 { font-size: 15px; font-weight: 500; margin-bottom: 12px; }
+    .modal input {
+      width: 100%;
+      padding: 9px 12px;
+      font-size: 16px;
+      border: 0.5px solid var(--border2);
+      border-radius: var(--radius-md);
+      background: var(--bg2);
+      color: var(--text);
+      font-family: var(--font);
+      margin-bottom: 12px;
+    }
+    .modal-btns { display: flex; gap: 8px; }
+    .btn-cancel {
+      flex: 1; padding: 9px; font-size: 14px; cursor: pointer;
+      background: none; border: 0.5px solid var(--border2);
+      border-radius: var(--radius-md); color: var(--text2);
+      font-family: var(--font);
+    }
+    .btn-confirm {
+      flex: 1; padding: 9px; font-size: 14px; cursor: pointer;
+      background: var(--blue); color: var(--blue-light);
+      border: none; border-radius: var(--radius-md);
+      font-family: var(--font);
+    }
+
+    /* Done */
+    .done-banner {
+      text-align: center;
+      padding: 1.5rem;
+      background: var(--bg2);
+      border-radius: var(--radius-lg);
+      margin-bottom: 14px;
+    }
+    .done-banner .big { font-size: 24px; font-weight: 500; margin-bottom: 4px; }
+    .done-banner .sub { font-size: 14px; color: var(--text2); }
+
+    /* Footer */
+    .footer { display: flex; justify-content: flex-end; }
+    .btn-reset {
+      font-size: 13px; color: var(--text2); cursor: pointer;
+      background: none; border: 0.5px solid var(--border);
+      border-radius: var(--radius-md); padding: 6px 14px;
+      font-family: var(--font);
+    }
+
+    /* Banner instalación iOS */
+    .install-banner {
+      background: var(--blue-light);
+      border: 0.5px solid var(--blue);
+      border-radius: var(--radius-lg);
+      padding: 12px 14px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      color: var(--blue);
+      line-height: 1.5;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .install-banner .close-banner {
+      background: none; border: none; color: var(--blue);
+      font-size: 18px; cursor: pointer; padding: 0; line-height: 1;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+
+<div class="wrap">
+  <p class="app-title">Cronómetro · Patinaje de velocidad</p>
+
+  <!-- Banner instalación iOS -->
+  <div class="install-banner" id="install-banner" style="display:none">
+    <span>Para instalar en tu iPhone: tocá <strong>Compartir</strong> (⎦) y luego <strong>"Agregar a pantalla de inicio"</strong>.</span>
+    <button class="close-banner" onclick="cerrarBanner()">×</button>
+  </div>
+
+  <!-- Configuración -->
+  <div class="config-panel" id="config-panel">
+    <div class="config-row">
+      <span class="config-label">Vueltas totales</span>
+      <input type="number" id="cfg-vueltas" value="15" min="1" max="99" />
+    </div>
+    <div class="config-row">
+      <span class="config-label">Marca (mm:ss)</span>
+      <input type="text" id="cfg-marca" value="4:25" placeholder="4:25" />
+    </div>
+    <p class="config-hint">Solo editable antes de iniciar.</p>
+  </div>
+
+  <!-- Cronómetro -->
+  <div class="cronometro">
+    <div class="tiempo-total" id="display-total">0:00.00</div>
+    <div class="tiempo-vuelta" id="display-vuelta">—</div>
+  </div>
+
+  <!-- Cards -->
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">Vuelta</div>
+      <div class="card-value blue" id="c-vuelta">0 / 15</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Objetivo/vuelta</div>
+      <div class="card-value" id="c-objetivo">17.67 s</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Tiempo restante</div>
+      <div class="card-value" id="c-restante">4:25.00</div>
+    </div>
+  </div>
+
+  <!-- Mensaje -->
+  <div class="message" id="msg">Configurá la prueba y presioná el botón para comenzar.</div>
+
+  <!-- Botón principal -->
+  <button class="btn-vuelta start" id="btn-vuelta" onclick="toqueVuelta()">Iniciar</button>
+
+  <!-- Tabla de vueltas -->
+  <div id="laps-section" style="display:none">
+    <div class="laps-grid">
+      <div class="lap-header">
+        <div>#</div><div>Tiempo</div><div>Objetivo</div><div>Diff</div><div></div>
+      </div>
+      <div id="laps-body"></div>
+    </div>
+  </div>
+
+  <!-- Resultado final -->
+  <div id="done-section" style="display:none" class="done-banner">
+    <div class="big" id="done-title">—</div>
+    <div class="sub" id="done-sub">—</div>
+    <br>
+    <button class="btn-reset" onclick="resetear()">Nueva prueba</button>
+  </div>
+
+  <!-- Modal edición -->
+  <div class="overlay" id="overlay" style="display:none">
+    <div class="modal">
+      <h3 id="modal-title">Corregir vuelta</h3>
+      <input type="number" id="edit-input" step="0.01" min="0.1" />
+      <div class="modal-btns">
+        <button class="btn-cancel" onclick="cerrarEditor()">Cancelar</button>
+        <button class="btn-confirm" onclick="guardarEdit()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <button class="btn-reset" id="btn-reset" style="display:none" onclick="resetear()">Reiniciar</button>
+  </div>
+</div>
+
+<script>
+  // ── Estado ──────────────────────────────────────────────
+  let TOTAL = 15, META = 4 * 60 + 25;
+  let estado = 'idle';
+  let startTime = null, lapStart = null;
+  let vueltas = [], objsPorVuelta = [];
+  let rafId = null, editIdx = null;
+
+  // ── Utilidades ──────────────────────────────────────────
+  function parseMarca(str) {
+    const p = str.trim().split(':');
+    if (p.length === 2) {
+      const m = parseInt(p[0]), s = parseFloat(p[1]);
+      if (!isNaN(m) && !isNaN(s)) return m * 60 + s;
+    }
+    return null;
+  }
+  function fmtMs(ms) {
+    const t = ms / 1000, m = Math.floor(t / 60);
+    return m + ':' + (t % 60).toFixed(2).padStart(5, '0');
+  }
+  function fmtSeg(s) {
+    if (isNaN(s) || s == null || s < 0) return '0:00.00';
+    const m = Math.floor(s / 60);
+    return m > 0 ? m + ':' + (s % 60).toFixed(2).padStart(5, '0') : (s % 60).toFixed(2) + ' s';
+  }
+  function obj(restantes, restSeg) {
+    return (restantes > 0 && restSeg > 0) ? restSeg / restantes : 0;
+  }
+
+  // ── Tick del cronómetro ─────────────────────────────────
+  function tick() {
+    if (estado !== 'running') return;
+    const now = performance.now();
+    const totalMs = now - startTime, lapMs = now - lapStart;
+    const acumSeg = totalMs / 1000, restSeg = META - acumSeg;
+    const restVueltas = TOTAL - vueltas.length;
+    document.getElementById('display-total').textContent = fmtMs(totalMs);
+    document.getElementById('display-vuelta').textContent = 'Esta vuelta: ' + fmtMs(lapMs);
+    document.getElementById('c-restante').textContent = restSeg > 0 ? fmtSeg(restSeg) : '0:00.00';
+    document.getElementById('c-objetivo').textContent =
+      restVueltas > 0 && restSeg > 0 ? obj(restVueltas, restSeg).toFixed(2) + ' s' : '—';
+    rafId = requestAnimationFrame(tick);
+  }
+
+  // ── Toque del botón ─────────────────────────────────────
+  function toqueVuelta() {
+    if (estado === 'done') return;
+    const now = performance.now();
+
+    if (estado === 'idle') {
+      const v = parseInt(document.getElementById('cfg-vueltas').value);
+      const m = parseMarca(document.getElementById('cfg-marca').value);
+      if (!v || v < 1) { alert('Ingresá un número de vueltas válido.'); return; }
+      if (!m || m <= 0) { alert('Ingresá una marca válida (ej: 4:25).'); return; }
+      TOTAL = v; META = m;
+      document.getElementById('config-panel').classList.add('locked');
+      document.getElementById('c-vuelta').textContent = '0 / ' + TOTAL;
+      document.getElementById('c-objetivo').textContent = obj(TOTAL, META).toFixed(2) + ' s';
+      document.getElementById('c-restante').textContent = fmtSeg(META);
+      startTime = now; lapStart = now;
+      estado = 'running';
+      document.getElementById('btn-vuelta').textContent = 'Vuelta';
+      document.getElementById('btn-vuelta').className = 'btn-vuelta running';
+      document.getElementById('btn-reset').style.display = 'inline-block';
+      document.getElementById('msg').innerHTML = 'Cronómetro corriendo. Tocá el botón cada vez que pase la meta.';
+      rafId = requestAnimationFrame(tick);
+      return;
+    }
+
+    // registrar vuelta
+    const lapMs = now - lapStart, lapSeg = lapMs / 1000;
+    const acumSeg = (now - startTime) / 1000;
+    const restSeg = META - (acumSeg - lapSeg);
+    const restantes = TOTAL - vueltas.length;
+    const o = obj(restantes, restSeg);
+    objsPorVuelta.push(o);
+    vueltas.push(lapSeg);
+    lapStart = now;
+
+    document.getElementById('c-vuelta').textContent = vueltas.length + ' / ' + TOTAL;
+    document.getElementById('laps-section').style.display = 'block';
+    renderTabla();
+    recalcMsg();
+
+    if (vueltas.length >= TOTAL) terminar();
+  }
+
+  // ── Terminar prueba ─────────────────────────────────────
+  function terminar() {
+    cancelAnimationFrame(rafId);
+    estado = 'done';
+    document.getElementById('btn-vuelta').textContent = 'Finalizado';
+    document.getElementById('btn-vuelta').className = 'btn-vuelta done';
+    document.getElementById('display-vuelta').textContent = '';
+    document.getElementById('msg').style.display = 'none';
+    document.getElementById('done-section').style.display = 'block';
+    mostrarResultado();
+  }
+
+  function mostrarResultado() {
+    const acumFinal = vueltas.reduce((a, b) => a + b, 0);
+    const cumplio = acumFinal <= META;
+    const diff = Math.abs(acumFinal - META).toFixed(2);
+    document.getElementById('done-title').textContent = cumplio ? 'Marca cumplida ✓' : 'Marca no cumplida';
+    document.getElementById('done-title').style.color = cumplio ? 'var(--green)' : 'var(--red)';
+    document.getElementById('done-sub').textContent =
+      'Tiempo final: ' + fmtSeg(acumFinal) + ' — ' +
+      (cumplio ? diff + ' seg por debajo' : diff + ' seg por encima');
+  }
+
+  // ── Tabla ───────────────────────────────────────────────
+  function renderTabla() {
+    const body = document.getElementById('laps-body');
+    body.innerHTML = '';
+    for (let i = vueltas.length - 1; i >= 0; i--) {
+      const t = vueltas[i], o = objsPorVuelta[i] || 0;
+      const diff = t - o;
+      const cls = Math.abs(diff) < 0.5 ? '' : diff > 0 ? 'slow' : 'fast';
+      const diffStr = (diff >= 0 ? '+' : '') + diff.toFixed(2) + 's';
+      const row = document.createElement('div');
+      row.className = 'lap-row';
+      row.innerHTML =
+        '<div class="num">' + (i + 1) + '</div>' +
+        '<div>' + t.toFixed(2) + 's</div>' +
+        '<div>' + o.toFixed(2) + 's</div>' +
+        '<div class="' + cls + '">' + diffStr + '</div>' +
+        '<div><button class="edit-btn" onclick="abrirEditor(' + i + ')">✎</button></div>';
+      body.appendChild(row);
+    }
+  }
+
+  // ── Mensaje dinámico ────────────────────────────────────
+  function recalcMsg() {
+    if (estado === 'done') return;
+    const acum = vueltas.reduce((a, b) => a + b, 0);
+    const restVueltas = TOTAL - vueltas.length;
+    const restSeg = META - acum;
+    const o = obj(restVueltas, restSeg);
+    const msg = document.getElementById('msg');
+    if (restSeg <= 0) {
+      msg.innerHTML = 'La marca ya no es alcanzable.';
+      msg.className = 'message danger';
+    } else {
+      msg.innerHTML = 'Quedan <strong>' + restVueltas + ' vuelta' + (restVueltas !== 1 ? 's' : '') +
+        '</strong>. Debe ir a <strong>' + o.toFixed(2) + ' seg/vuelta</strong> para cumplir.';
+      msg.className = 'message';
+    }
+  }
+
+  // ── Editor de vuelta ────────────────────────────────────
+  function abrirEditor(idx) {
+    editIdx = idx;
+    document.getElementById('modal-title').textContent = 'Corregir vuelta ' + (idx + 1);
+    document.getElementById('edit-input').value = vueltas[idx].toFixed(2);
+    document.getElementById('overlay').style.display = 'flex';
+    setTimeout(() => document.getElementById('edit-input').focus(), 80);
+  }
+  function cerrarEditor() {
+    document.getElementById('overlay').style.display = 'none';
+    editIdx = null;
+  }
+  function guardarEdit() {
+    const val = parseFloat(document.getElementById('edit-input').value);
+    if (isNaN(val) || val <= 0) { alert('Ingresá un tiempo válido.'); return; }
+    vueltas[editIdx] = val;
+    cerrarEditor();
+    renderTabla();
+    recalcMsg();
+    if (estado === 'done') mostrarResultado();
+  }
+  document.getElementById('edit-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') guardarEdit();
+    if (e.key === 'Escape') cerrarEditor();
+  });
+
+  // ── Reiniciar ───────────────────────────────────────────
+  function resetear() {
+    cancelAnimationFrame(rafId);
+    cerrarEditor();
+    estado = 'idle'; startTime = null; lapStart = null;
+    vueltas = []; objsPorVuelta = [];
+    const v = parseInt(document.getElementById('cfg-vueltas').value) || 15;
+    const m = parseMarca(document.getElementById('cfg-marca').value) || META;
+    TOTAL = v; META = m;
+    document.getElementById('display-total').textContent = '0:00.00';
+    document.getElementById('display-vuelta').textContent = '—';
+    document.getElementById('c-vuelta').textContent = '0 / ' + TOTAL;
+    document.getElementById('c-objetivo').textContent = obj(TOTAL, META).toFixed(2) + ' s';
+    document.getElementById('c-restante').textContent = fmtSeg(META);
+    document.getElementById('msg').innerHTML = 'Configurá la prueba y presioná el botón para comenzar.';
+    document.getElementById('msg').style.display = 'block';
+    document.getElementById('msg').className = 'message';
+    document.getElementById('btn-vuelta').textContent = 'Iniciar';
+    document.getElementById('btn-vuelta').className = 'btn-vuelta start';
+    document.getElementById('btn-reset').style.display = 'none';
+    document.getElementById('laps-section').style.display = 'none';
+    document.getElementById('laps-body').innerHTML = '';
+    document.getElementById('done-section').style.display = 'none';
+    document.getElementById('config-panel').classList.remove('locked');
+  }
+
+  // ── Config en vivo ──────────────────────────────────────
+  document.getElementById('cfg-vueltas').addEventListener('input', function () {
+    const v = parseInt(this.value) || 15;
+    const m = parseMarca(document.getElementById('cfg-marca').value) || META;
+    document.getElementById('c-vuelta').textContent = '0 / ' + v;
+    document.getElementById('c-objetivo').textContent = obj(v, m).toFixed(2) + ' s';
+  });
+  document.getElementById('cfg-marca').addEventListener('input', function () {
+    const m = parseMarca(this.value); if (!m) return;
+    const v = parseInt(document.getElementById('cfg-vueltas').value) || TOTAL;
+    document.getElementById('c-restante').textContent = fmtSeg(m);
+    document.getElementById('c-objetivo').textContent = obj(v, m).toFixed(2) + ' s';
+  });
+
+  // ── Banner instalación iOS ──────────────────────────────
+  function esIOS() {
+    return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.navigator.standalone;
+  }
+  function cerrarBanner() {
+    document.getElementById('install-banner').style.display = 'none';
+    localStorage.setItem('banner-cerrado', '1');
+  }
+  if (esIOS() && !localStorage.getItem('banner-cerrado')) {
+    document.getElementById('install-banner').style.display = 'flex';
+  }
+
+  // ── Botón auriculares (Media Session API) ───────────────
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: 'Cronómetro Patinaje',
+    });
+    navigator.mediaSession.setActionHandler('nexttrack', toqueVuelta);
+    navigator.mediaSession.setActionHandler('previoustrack', toqueVuelta);
+    navigator.mediaSession.setActionHandler('play', toqueVuelta);
+    navigator.mediaSession.setActionHandler('pause', toqueVuelta);
+
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const buf = ctx.createBuffer(1, 1, 22050);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    src.start(0);
+  }
+
+  // ── Service Worker ──────────────────────────────────────
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+</script>
+</body>
+</html>
